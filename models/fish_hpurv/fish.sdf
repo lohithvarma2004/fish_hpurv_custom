@@ -1,0 +1,338 @@
+<sdf version='1.6'>
+  <model name='fish_hpurv'>
+    <link name='link_base'>
+      <inertial>
+        <pose>0.032582 0.049301 -0.019765 1.57 -0 0</pose>
+        <mass>12.2</mass>
+        <inertia>
+          <ixx>0.0104225</ixx>
+          <ixy>-1.73196e-18</ixy>
+          <ixz>-3.47083e-18</ixz>
+          <iyy>0.010101</iyy>
+          <iyz>-2.56038e-07</iyz>
+          <izz>0.0104225</izz>
+        </inertia>
+      </inertial>
+      <collision name='link_base_collision'>
+        <pose>0.032582 0.049301 -0.020428 1.57 -0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>/home/uav/ros2_ws/install/fish_hpurv/share/fish_hpurv/meshes/link_base.stl</uri>
+          </mesh>
+        </geometry>
+        <surface>
+          <contact>
+            <ode/>
+          </contact>
+          <friction>
+            <ode/>
+          </friction>
+        </surface>
+      </collision>
+      <collision name='link_base_fixed_joint_lump__imu_link_collision_1'>
+        <pose>0.032582 0.049301 0.02 0 -0 0</pose>
+        <geometry>
+          <box>
+            <size>0.01 0.01 0.01</size>
+          </box>
+        </geometry>
+        <surface>
+          <contact>
+            <ode/>
+          </contact>
+          <friction>
+            <ode/>
+          </friction>
+        </surface>
+      </collision>
+      <collision name='link_base_fixed_joint_lump__laser_frame_collision_2'>
+        <pose>0.032582 0.049301 0.02 0 -0 0</pose>
+        <geometry>
+          <cylinder>
+            <length>0.04</length>
+            <radius>0.05</radius>
+          </cylinder>
+        </geometry>
+        <surface>
+          <contact>
+            <ode/>
+          </contact>
+          <friction>
+            <ode/>
+          </friction>
+        </surface>
+      </collision>
+      <visual name='link_base_visual'>
+        <pose>0.032582 0.049301 0.02 1.57 -0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>/home/uav/ros2_ws/install/fish_hpurv/share/fish_hpurv/meshes/link_base.stl</uri>
+          </mesh>
+        </geometry>
+      </visual>
+      <visual name='link_base_fixed_joint_lump__imu_link_visual_1'>
+        <pose>0.032582 0.049301 0.02 0 -0 0</pose>
+        <geometry>
+          <box>
+            <size>0.01 0.01 0.01</size>
+          </box>
+        </geometry>
+      </visual>
+      <visual name='link_base_fixed_joint_lump__laser_frame_visual_2'>
+        <pose>0.032582 0.049301 0.02 0 -0 0</pose>
+        <geometry>
+          <cylinder>
+            <length>0.04</length>
+            <radius>0.05</radius>
+          </cylinder>
+        </geometry>
+        <material>
+          <script>
+            <name>Gazebo/Red</name>
+            <uri>file://media/materials/scripts/gazebo.material</uri>
+          </script>
+        </material>
+      </visual>
+      <sensor name='dvl_sensor' type='ray'>
+        <pose>0.03 -0.085 -0.06 3.14159 0.001593 3.14159</pose>
+        <visualize>1</visualize>
+        <update_rate>10</update_rate>
+        <ray>
+          <scan>
+            <horizontal>
+              <samples>4</samples>
+              <min_angle>0</min_angle>
+              <max_angle>6.28319</max_angle>
+              <resolution>1</resolution>
+            </horizontal>
+            <vertical>
+              <samples>1</samples>
+              <min_angle>1.2217</min_angle>
+              <max_angle>1.2217</max_angle>
+            </vertical>
+          </scan>
+          <range>
+            <min>0.1</min>
+            <max>100</max>
+          </range>
+        </ray>
+        <plugin name='custom_dvl_plugin' filename='libfish_dvl_plugin.so'/>
+      </sensor>
+      <sensor name='imu_sensor' type='imu'>
+        <update_rate>50</update_rate>
+        <always_on>1</always_on>
+        <visualize>1</visualize>
+        <plugin name='imu_plugin' filename='libgazebo_ros_imu_sensor.so'>
+          <ros>
+            <argument>~/out:=/imu/data</argument>
+          </ros>
+          <topicName>/imu/data</topicName>
+          <frameName>imu_link</frameName>
+        </plugin>
+        <pose>0.032582 0.049301 0.02 0 -0 0</pose>
+      </sensor>
+      <sensor name='laser' type='ray'>
+        <visualize>1</visualize>
+        <update_rate>10</update_rate>
+        <ray>
+          <scan>
+            <horizontal>
+              <samples>360</samples>
+              <min_angle>-3.14</min_angle>
+              <max_angle>3.14</max_angle>
+              <resolution>1</resolution>
+            </horizontal>
+          </scan>
+          <range>
+            <min>0.3</min>
+            <max>12</max>
+          </range>
+        </ray>
+        <plugin name='laser_controller' filename='libgazebo_ros_ray_sensor.so'>
+          <ros>
+            <argument>~/out:=/scan</argument>
+          </ros>
+          <output_type>sensor_msgs/LaserScan</output_type>
+          <frame_name>laser_frame</frame_name>
+        </plugin>
+        <pose>0.032582 0.049301 0.02 0 -0 0</pose>
+      </sensor>
+    </link>
+    <joint name='caudal_joint' type='revolute'>
+      <pose relative_to='link_base'>0.425323 0.05 0.06 0 -0 0</pose>
+      <parent>link_base</parent>
+      <child>link_caudal</child>
+      <axis>
+        <xyz>0 0 1</xyz>
+        <limit>
+          <lower>-0.523599</lower>
+          <upper>0.523599</upper>
+          <effort>10</effort>
+          <velocity>10</velocity>
+        </limit>
+        <dynamics>
+          <spring_reference>0</spring_reference>
+          <spring_stiffness>0</spring_stiffness>
+        </dynamics>
+      </axis>
+    </joint>
+    <link name='link_caudal'>
+      <pose relative_to='caudal_joint'>0 0 0 0 -0 0</pose>
+      <inertial>
+        <pose>-0.378805 0 -0.05 1.5708 -0 0</pose>
+        <mass>0.2</mass>
+        <inertia>
+          <ixx>0.005</ixx>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyy>0.005</iyy>
+          <iyz>0</iyz>
+          <izz>0.005</izz>
+        </inertia>
+      </inertial>
+      <collision name='link_caudal_collision'>
+        <pose>-0.378805 0 -0.05 1.5708 -0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>/home/uav/ros2_ws/install/fish_hpurv/share/fish_hpurv/meshes/link_caudal.stl</uri>
+          </mesh>
+        </geometry>
+      </collision>
+      <visual name='link_caudal_visual'>
+        <pose>-0.378805 0 -0.05 1.5708 -0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>/home/uav/ros2_ws/install/fish_hpurv/share/fish_hpurv/meshes/link_caudal.stl</uri>
+          </mesh>
+        </geometry>
+      </visual>
+    </link>
+    <joint name='joint1' type='revolute'>
+      <pose relative_to='link_base'>-0.05 0.18 0.035 1.57 -0 0</pose>
+      <parent>link_base</parent>
+      <child>link_pectoral_left</child>
+      <axis>
+        <xyz>0 0 1</xyz>
+        <limit>
+          <lower>-0.785398</lower>
+          <upper>0.785398</upper>
+          <effort>10</effort>
+          <velocity>10</velocity>
+        </limit>
+        <dynamics>
+          <spring_reference>0</spring_reference>
+          <spring_stiffness>0</spring_stiffness>
+        </dynamics>
+      </axis>
+    </joint>
+    <link name='link_pectoral_left'>
+      <pose relative_to='joint1'>0 0 0 0 -0 0</pose>
+      <inertial>
+        <pose>0.082983 -0.047058 0.13 3.14 -0 0</pose>
+        <mass>0.1</mass>
+        <inertia>
+          <ixx>0.001</ixx>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyy>0.001</iyy>
+          <iyz>0</iyz>
+          <izz>0.001</izz>
+        </inertia>
+      </inertial>
+      <collision name='link_pectoral_left_collision'>
+        <pose>0.082983 -0.047058 0.13 3.14 -0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>/home/uav/ros2_ws/install/fish_hpurv/share/fish_hpurv/meshes/link_pectoral_left.stl</uri>
+          </mesh>
+        </geometry>
+      </collision>
+      <visual name='link_pectoral_left_visual'>
+        <pose>0.082983 -0.047058 0.13 3.14 -0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>/home/uav/ros2_ws/install/fish_hpurv/share/fish_hpurv/meshes/link_pectoral_left.stl</uri>
+          </mesh>
+        </geometry>
+      </visual>
+    </link>
+    <joint name='joint2' type='revolute'>
+      <pose relative_to='link_base'>-0.05 -0.08 0.035 -1.57 0 0</pose>
+      <parent>link_base</parent>
+      <child>link_pectoral_right</child>
+      <axis>
+        <xyz>0 0 1</xyz>
+        <limit>
+          <lower>-0.785398</lower>
+          <upper>0.785398</upper>
+          <effort>10</effort>
+          <velocity>10</velocity>
+        </limit>
+        <dynamics>
+          <spring_reference>0</spring_reference>
+          <spring_stiffness>0</spring_stiffness>
+        </dynamics>
+      </axis>
+    </joint>
+    <link name='link_pectoral_right'>
+      <pose relative_to='joint2'>0 0 0 0 -0 0</pose>
+      <inertial>
+        <pose>0.082983 0.047058 0.13 0 -0 0</pose>
+        <mass>0.1</mass>
+        <inertia>
+          <ixx>0.001</ixx>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyy>0.001</iyy>
+          <iyz>0</iyz>
+          <izz>0.001</izz>
+        </inertia>
+      </inertial>
+      <collision name='link_pectoral_right_collision'>
+        <pose>0.082983 0.047058 0.13 0 -0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>/home/uav/ros2_ws/install/fish_hpurv/share/fish_hpurv/meshes/link_pectoral_right.stl</uri>
+          </mesh>
+        </geometry>
+      </collision>
+      <visual name='link_pectoral_right_visual'>
+        <pose>0.082983 0.047058 0.13 0 -0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>/home/uav/ros2_ws/install/fish_hpurv/share/fish_hpurv/meshes/link_pectoral_right.stl</uri>
+          </mesh>
+        </geometry>
+      </visual>
+    </link>
+    <static>0</static>
+    <plugin name='buoyancy_plugin' filename='libBuoyancyPlugin.so'>
+      <fluid_density>1000</fluid_density>
+      <link name='link_base'>
+        <volume>0.0122</volume>
+        <center_of_volume>0.0325815 0.0493006 0.02</center_of_volume>
+      </link>
+      <link name='link_caudal'>
+        <volume>0.0002</volume>
+        <center_of_volume>-0.378805 0 -0.05</center_of_volume>
+      </link>
+      <link name='link_pectoral_left'>
+        <volume>0.0001</volume>
+        <center_of_volume>0.0829833 -0.0470575 0.13</center_of_volume>
+      </link>
+      <link name='link_pectoral_right'>
+        <volume>0.0001</volume>
+        <center_of_volume>0.0829833 0.0470575 0.13</center_of_volume>
+      </link>
+    </plugin>
+    <plugin name="constant_force_plugin" filename="libforce_plugin.so"/>
+  </model>
+</sdf>

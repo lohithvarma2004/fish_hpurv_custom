@@ -1,0 +1,209 @@
+<sdf version='1.6'>
+  <model name='fish_hpurv'>
+
+    <!-- LINK: link_base -->
+    <link name='link_base'>
+      <!-- Keep link_base at the same pose -->
+      <pose>0 0 0 0 0 0</pose>
+      <inertial>
+        <!-- Align inertial pose with collision pose for better CoM alignment -->
+        <pose>0.005651 0.012105 0.000613 0 0 0</pose>
+        <mass>5</mass>
+        <inertia>
+          <ixx>0.01</ixx>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyy>0.01</iyy>
+          <iyz>0</iyz>
+          <izz>0.01</izz>
+        </inertia>
+      </inertial>
+      <collision name='link_base_collision'>
+        <pose>0.005651 0.012105 0.000613 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://fish_hpurv/meshes/link_base.stl</uri>
+          </mesh>
+        </geometry>
+        <!-- Add friction -->
+        <surface>
+          <contact><ode/></contact>
+          <friction>
+            <ode>
+              <mu>1.0</mu>
+              <mu2>1.0</mu2>
+            </ode>
+          </friction>
+        </surface>
+      </collision>
+      <visual name='link_base_visual'>
+        <pose>0.005651 0.012105 0.000613 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://fish_hpurv/meshes/link_base.stl</uri>
+          </mesh>
+        </geometry>
+      </visual>
+    </link>
+
+    <!-- LINK: link_p2 -->
+    <link name='link_p2'>
+      <!-- Same link pose -->
+      <pose>0.005651 0.012105 0.029003 3.14159 0 0</pose>
+      <inertial>
+        <!-- Align inertial pose with collision offset -->
+        <pose>0 0.003 -0.0026 1.5708 1.5708 0</pose>
+        <mass>1</mass>
+        <inertia>
+          <ixx>0.001</ixx>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyy>0.001</iyy>
+          <iyz>0</iyz>
+          <izz>0.001</izz>
+        </inertia>
+      </inertial>
+      <collision name='link_p2_collision'>
+        <pose>0 0.003 -0.0026 1.5708 1.5708 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://fish_hpurv/meshes/link_p2.stl</uri>
+          </mesh>
+        </geometry>
+        <!-- Add friction -->
+        <surface>
+          <contact><ode/></contact>
+          <friction>
+            <ode>
+              <mu>10.0</mu>
+              <mu2>10.0</mu2>
+            </ode>
+          </friction>
+        </surface>
+      </collision>
+      <visual name='link_p2_visual'>
+        <pose>0 0.003 -0.0026 1.5708 1.5708 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://fish_hpurv/meshes/link_p2.stl</uri>
+          </mesh>
+        </geometry>
+      </visual>
+    </link>
+
+    <!-- JOINT: joint1 (between link_base and link_p2) -->
+    <joint name='joint1' type='revolute'>
+      <pose>0.005651 0.012105 0.029003 3.14159 0 0</pose>
+      <parent>link_base</parent>
+      <child>link_p2</child>
+      <axis>
+        <xyz>0 0 1</xyz>
+        <limit>
+          <lower>-0.523599</lower>
+          <upper>0.523599</upper>
+          <effort>10</effort>
+          <velocity>10</velocity>
+        </limit>
+        <dynamics>
+          <damping>1.0</damping>
+          <spring_reference>1</spring_reference>
+          <spring_stiffness>1</spring_stiffness>
+        </dynamics>
+      </axis>
+    </joint>
+
+    <!-- LINK: link_p1 -->
+    <link name='link_p1'>
+      <!-- Same link pose -->
+      <pose>0.005651 0.012105 -0.002387 0 0 0</pose>
+      <inertial>
+        <!-- Align inertial pose with collision offset -->
+        <pose>0 0.003 -0.0026 1.5708 1.5708 0</pose>
+        <mass>1</mass>
+        <inertia>
+          <ixx>0.001</ixx>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyy>0.001</iyy>
+          <iyz>0</iyz>
+          <izz>0.001</izz>
+        </inertia>
+      </inertial>
+      <collision name='link_p1_collision'>
+        <pose>0 0.003 -0.0026 1.5708 1.5708 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://fish_hpurv/meshes/link_p1.stl</uri>
+          </mesh>
+        </geometry>
+        <!-- Add friction -->
+        <surface>
+          <contact><ode/></contact>
+          <friction>
+            <ode>
+              <mu>10.0</mu>
+              <mu2>10.0</mu2>
+            </ode>
+          </friction>
+        </surface>
+      </collision>
+      <visual name='link_p1_visual'>
+        <pose>0 0.003 -0.0026 1.5708 1.5708 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://fish_hpurv/meshes/link_p1.stl</uri>
+          </mesh>
+        </geometry>
+      </visual>
+    </link>
+
+    <!-- JOINT: joint2 (between link_base and link_p1) -->
+    <joint name='joint2' type='revolute'>
+      <pose>0.005651 0.012105 -0.002387 0 0 0</pose>
+      <parent>link_base</parent>
+      <child>link_p1</child>
+      <axis>
+        <xyz>0 0 1</xyz>
+        <limit>
+          <lower>-0.523599</lower>
+          <upper>0.523599</upper>
+          <effort>10</effort>
+          <velocity>10</velocity>
+        </limit>
+        <dynamics>
+          <damping>1.0</damping>
+          <spring_reference>0</spring_reference>
+          <spring_stiffness>0</spring_stiffness>
+        </dynamics>
+      </axis>
+    </joint>
+
+    <!-- Buoyancy Plugin -->
+    <gazebo>
+      <plugin name="buoyancy_plugin" filename="libBuoyancyPlugin.so">
+        <fluid_density>1000</fluid_density>
+        <!-- For a fish body defined as a 1.0 x 0.5 x 0.3 box, volume = 0.15 m³ -->
+        <link name="link_base">
+          <volume>0.15</volume>
+          <center_of_volume>0.005651 0.012105 0.000613</center_of_volume>
+        </link>
+        <!-- For fins defined as 0.5 x 0.05 x 0.2 boxes, volume = 0.005 m³ -->
+        <link name="link_p2">
+          <volume>0.005</volume>
+          <center_of_volume>0 0.003 -0.0026</center_of_volume>
+        </link>
+        <link name="link_p1">
+          <volume>0.005</volume>
+          <center_of_volume>0 0.003 -0.0026</center_of_volume>
+        </link>
+      </plugin>
+    </gazebo>
+
+  </model>
+</sdf>
