@@ -275,7 +275,7 @@
       <robotNamespace>/</robotNamespace>
       <parameters>$(find fish_hpurv)/config/my_controllers.yaml</parameters>
     </plugin>
-    <plugin name="caudal_force_plugin" filename="libfish_hpurv/libCaudalForcePlugin.so"/>
+    <plugin name="caudal_force_plugin" filename="/home/uav/ros2_ws/install/fish_hpurv/lib/fish_hpurv/libCaudalForcePlugin.so"/>
   </gazebo>
 
   <ros2_control name="FishSim" type="system">

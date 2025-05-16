@@ -333,6 +333,6 @@
         <center_of_volume>0.0829833 0.0470575 0.13</center_of_volume>
       </link>
     </plugin>
-    <plugin name="constant_force_plugin" filename="libforce_plugin.so"/>
+   <plugin name="caudal_force_plugin" filename="/home/uav/ros2_ws/install/fish_hpurv/lib/libcaudal_force_plugin.so"/>
   </model>
 </sdf>

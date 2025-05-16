@@ -56,7 +56,7 @@ public:
     }
 
     // Compute force: F_x = k * |v| * v
-    double k = 5.0; // Thrust coefficient (N·s/rad²)
+    double k = 1.0; // Thrust coefficient (N·s/rad²)
     double force_x = k * std::abs(this->caudal_velocity) * this->caudal_velocity;
     ignition::math::Vector3d force(force_x, 0, 0); // Forward force in link_base frame
 
