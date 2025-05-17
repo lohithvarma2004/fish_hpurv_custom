@@ -13,7 +13,6 @@ class CaudalForcePlugin : public ModelPlugin
 public:
   void Load(physics::ModelPtr _model, sdf::ElementPtr /*_sdf*/) override
   {
-    // Store model and link
     this->model = _model;
     this->link = model->GetLink("link_base");
 
@@ -23,23 +22,20 @@ public:
       return;
     }
 
-    // Initialize ROS 2 node
     if (!rclcpp::ok())
     {
       rclcpp::init(0, nullptr);
     }
     this->ros_node = std::make_shared<rclcpp::Node>("caudal_force_plugin");
 
-    // Subscribe to caudal velocity
     this->velocity_sub = ros_node->create_subscription<std_msgs::msg::Float64>(
         "/caudal_velocity", 10,
         std::bind(&CaudalForcePlugin::OnVelocityMsg, this, std::placeholders::_1));
 
-    // Connect to Gazebo update event
     this->updateConnection = event::Events::ConnectWorldUpdateBegin(
         std::bind(&CaudalForcePlugin::OnUpdate, this));
 
-    gzmsg << "[INFO] CaudalForcePlugin loaded! Applying force on " << this->link->GetName() << "\n";
+    gzmsg << "[INFO] CaudalForcePlugin loaded! Applying COM-centered force on " << this->link->GetName() << "\n";
   }
 
   void OnVelocityMsg(const std_msgs::msg::Float64::SharedPtr msg)
@@ -55,18 +51,24 @@ public:
       return;
     }
 
-    // Compute force: F_x = k * |v| * v
-    double k = 1.0; // Thrust coefficient (N·s/rad²)
+    double k = 1.0;
     double force_x = k * std::abs(this->caudal_velocity) * this->caudal_velocity;
-    ignition::math::Vector3d force(force_x, 0, 0); // Forward force in link_base frame
+    ignition::math::Vector3d force(force_x, 0, 0);
 
-    // Apply force to link_base
-    this->link->AddRelativeForce(force);
+    ignition::math::Vector3d com = this->link->GetInertial()->Pose().Pos();
+    this->link->AddForceAtRelativePosition(force, com);
 
-    gzdbg << "[DEBUG] Applied force: " << force << " on " << this->link->GetName()
-          << " for caudal velocity: " << this->caudal_velocity << "\n";
+    // 🔒 Cancel rotation (yaw, pitch, roll)
+    this->link->SetAngularVel(ignition::math::Vector3d(0, 0, 0));
 
-    // Spin ROS node to process callbacks
+    // 🔒 Constrain linear velocity to X-axis only
+    double vx = this->link->WorldLinearVel().X();
+    this->link->SetLinearVel(ignition::math::Vector3d(vx, 0, 0));
+
+    gzdbg << "[DEBUG] Applied force: " << force << " at COM: " << com
+          << " | AngularVel reset | LinearVel = (" << vx << ", 0, 0)"
+          << " | Caudal velocity command: " << this->caudal_velocity << "\n";
+
     rclcpp::spin_some(this->ros_node);
   }
 
@@ -79,6 +81,5 @@ private:
   double caudal_velocity = 0.0;
 };
 
-// Register plugin
 GZ_REGISTER_MODEL_PLUGIN(gazebo::CaudalForcePlugin)
 }

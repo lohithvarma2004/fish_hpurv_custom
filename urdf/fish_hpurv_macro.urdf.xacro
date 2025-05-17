@@ -121,37 +121,8 @@
     <limit effort="10" velocity="10" lower="-0.785398" upper="0.785398"/>
   </joint>
 
-  <joint name="laser_joint" type="fixed">
-    <parent link="link_base"/>
-    <child link="laser_frame"/>
-    <origin xyz="0.0325815 0.0493006 0.02" rpy="0 0 0"/>
-  </joint>
-
-  <link name="laser_frame">
-    <inertial>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <mass value="0.1"/>
-      <inertia ixx="0.0001" ixy="0" ixz="0" iyy="0.0001" iyz="0" izz="0.0001"/>
-    </inertial>
-    <visual>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <geometry>
-        <cylinder radius="0.05" length="0.04"/>
-      </geometry>
-      <material name="red">
-        <color rgba="1 0 0 1"/>
-      </material>
-    </visual>
-    <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <geometry>
-        <cylinder radius="0.05" length="0.04"/>
-      </geometry>
-    </collision>
-  </link>
-
-
-  <gazebo reference="laser_frame">
+  
+  <gazebo reference="link_base">
     <material>Gazebo/Red</material>
     <sensor name="laser" type="ray">
       <pose>0 0 0 0 0 0</pose>
@@ -180,35 +151,7 @@
     </sensor>
   </gazebo>
 
-  <joint name="imu_joint" type="fixed">
-    <parent link="link_base"/>
-    <child link="imu_link"/>
-    <origin xyz="0.0325815 0.0493006 0.02" rpy="0 0 0"/>
-  </joint>
-
-  <link name="imu_link">
-    <inertial>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <mass value="0.1"/>
-      <inertia ixx="0.000001" ixy="0" ixz="0" iyy="0.000001" iyz="0" izz="0.000001"/>
-    </inertial>
-    <visual>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <geometry>
-        <box size="0.01 0.01 0.01"/>
-      </geometry>
-      <material name="blue">
-        <color rgba="0 0 1 1"/>
-      </material>
-    </visual>
-    <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <geometry>
-        <box size="0.01 0.01 0.01"/>
-      </geometry>
-    </collision>
-  </link>
-  <gazebo reference="imu_link">
+  <gazebo reference="link_base">
     <sensor name="imu_sensor" type="imu">
       <update_rate>50</update_rate>
       <always_on>true</always_on>
@@ -254,7 +197,7 @@
     <plugin name="buoyancy_plugin" filename="libBuoyancyPlugin.so">
       <fluid_density>1000</fluid_density>
       <link name="link_base">
-        <volume>0.0122</volume>
+        <volume>0.0120</volume>
         <center_of_volume>0.0325815 0.0493006 0.02</center_of_volume>
       </link>
       <link name="link_caudal">
@@ -275,7 +218,7 @@
       <robotNamespace>/</robotNamespace>
       <parameters>$(find fish_hpurv)/config/my_controllers.yaml</parameters>
     </plugin>
-    <plugin name="caudal_force_plugin" filename="/home/uav/ros2_ws/install/fish_hpurv/lib/fish_hpurv/libCaudalForcePlugin.so"/>
+    <plugin name="caudal_force_plugin" filename="/home/lohithvarma2004/ros2_ws/install/fish_hpurv/lib/fish_hpurv/libCaudalForcePlugin.so"/>
   </gazebo>
 
   <ros2_control name="FishSim" type="system">
