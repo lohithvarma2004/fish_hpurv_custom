@@ -35,7 +35,7 @@ public:
     this->updateConnection = event::Events::ConnectWorldUpdateBegin(
         std::bind(&CaudalForcePlugin::OnUpdate, this));
 
-    gzmsg << "[INFO] CaudalForcePlugin loaded! Applying COM-centered force on " << this->link->GetName() << "\n";
+    gzmsg << "[INFO] CaudalForcePlugin loaded! Applying COM-centered force with yaw counter-torque on " << this->link->GetName() << "\n";
   }
 
   void OnVelocityMsg(const std_msgs::msg::Float64::SharedPtr msg)
@@ -58,15 +58,20 @@ public:
     ignition::math::Vector3d com = this->link->GetInertial()->Pose().Pos();
     this->link->AddForceAtRelativePosition(force, com);
 
-    // 🔒 Cancel rotation (yaw, pitch, roll)
-    this->link->SetAngularVel(ignition::math::Vector3d(0, 0, 0));
+    // Apply counter-torque to cancel yaw (z-axis rotation)
+    double kp = 10.0; // Proportional gain for yaw damping (adjust as needed)
+    ignition::math::Vector3d angular_vel = this->link->WorldAngularVel();
+    ignition::math::Vector3d counter_torque(0, 0, -kp * angular_vel.Z());
+    this->link->AddTorque(counter_torque);
 
-    // 🔒 Constrain linear velocity to X-axis only
+    // Constrain linear velocity to X-axis only
     double vx = this->link->WorldLinearVel().X();
     this->link->SetLinearVel(ignition::math::Vector3d(vx, 0, 0));
 
     gzdbg << "[DEBUG] Applied force: " << force << " at COM: " << com
-          << " | AngularVel reset | LinearVel = (" << vx << ", 0, 0)"
+          << " | Counter-torque: " << counter_torque
+          << " | AngularVel: " << angular_vel
+          << " | LinearVel: (" << vx << ", 0, 0)"
           << " | Caudal velocity command: " << this->caudal_velocity << "\n";
 
     rclcpp::spin_some(this->ros_node);

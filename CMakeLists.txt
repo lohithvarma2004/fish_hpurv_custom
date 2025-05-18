@@ -14,6 +14,7 @@ find_package(trajectory_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(Eigen3 REQUIRED)
+include_directories(${EIGEN3_INCLUDE_DIR})
 
 # Add executable for joint_publisher
 add_executable(joint_publisher scripts/joint_publisher.cpp)
@@ -43,6 +44,7 @@ install(TARGETS joint_publisher
    DESTINATION lib/${PROJECT_NAME}
  )
 
+
 # Add shared library for Gazebo plugin
 add_executable(force_dynamic_plugin scripts/force_dynamic_plugin.cpp)
 target_include_directories(force_dynamic_plugin PUBLIC
@@ -59,10 +61,31 @@ ament_target_dependencies(force_dynamic_plugin
   trajectory_msgs
   sensor_msgs
   geometry_msgs
+  std_msgs
 )
 install(TARGETS force_dynamic_plugin
   DESTINATION lib/${PROJECT_NAME}
 )
+
+
+#astarplugin
+add_executable(astar_planner_node scripts/astar_planner_node.cpp)
+target_include_directories(astar_planner_node PUBLIC
+  ${EIGEN3_INCLUDE_DIRS}
+)
+target_link_libraries(astar_planner_node
+  Eigen3::Eigen
+)
+ament_target_dependencies(astar_planner_node
+  rclcpp
+  geometry_msgs
+)
+install(TARGETS astar_planner_node
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+
+#caudalforceplugin
 add_library(CaudalForcePlugin SHARED scripts/CaudalForcePlugin.cpp)
 
 target_include_directories(CaudalForcePlugin PUBLIC
@@ -85,6 +108,8 @@ install(TARGETS CaudalForcePlugin
 )
 
 
+
+
 # Install directories
 install(DIRECTORY launch urdf config meshes worlds models
   DESTINATION share/${PROJECT_NAME}
@@ -95,6 +120,8 @@ install(DIRECTORY urdf
   DESTINATION share/${PROJECT_NAME}
   FILES_MATCHING PATTERN "*.xacro"
 )
+
+
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)

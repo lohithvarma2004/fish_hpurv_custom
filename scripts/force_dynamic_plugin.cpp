@@ -66,6 +66,10 @@ public:
             "/joint_trajectory_controller/joint_trajectory", 10);
         velocity_pub_ = create_publisher<std_msgs::msg::Float64>(
             "/caudal_velocity", 10);
+        pectoral_left_velocity_pub_ = create_publisher<std_msgs::msg::Float64>(
+            "/pectoral_left_velocity", 10);
+        pectoral_right_velocity_pub_ = create_publisher<std_msgs::msg::Float64>(
+            "/pectoral_right_velocity", 10);
 
         // Timer for dynamics update (30 Hz to match controller)
         timer_ = create_wall_timer(
@@ -105,10 +109,18 @@ private:
         double v2 = 0.5 * 2 * M_PI * fi * cos(2 * M_PI * fi * t + M_PI / 2);
         double v3 = 0.5 * 2 * M_PI * fi * cos(2 * M_PI * fi * t + M_PI / 2);
 
-        // Publish caudal velocity
+        // Publish velocities
         std_msgs::msg::Float64 velocity_msg;
         velocity_msg.data = v1;
         velocity_pub_->publish(velocity_msg);
+
+        std_msgs::msg::Float64 pectoral_left_velocity_msg;
+        pectoral_left_velocity_msg.data = v2;
+        pectoral_left_velocity_pub_->publish(pectoral_left_velocity_msg);
+
+        std_msgs::msg::Float64 pectoral_right_velocity_msg;
+        pectoral_right_velocity_msg.data = v3;
+        pectoral_right_velocity_pub_->publish(pectoral_right_velocity_msg);
 
         // Approximate pose update (for logging, Gazebo handles actual physics)
         double k = 5.0; // Thrust coefficient (N·s/rad²)
@@ -162,6 +174,8 @@ private:
         RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000, "Pose: x=%f, y=%f, z=%f", eta_(0), eta_(1), eta_(2));
         RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000, "Published trajectory: b1=%f, b2=%f, b3=%f", b1_, b2_, b3_);
         RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000, "Published caudal velocity: %f", v1);
+        RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000, "Published pectoral left velocity: %f", v2);
+        RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000, "Published pectoral right velocity: %f", v3);
     }
 
     // Member variables
@@ -171,6 +185,8 @@ private:
     rclcpp::Publisher<geometry_msgs::msg::Pose>::SharedPtr pose_pub_;
     rclcpp::Publisher<trajectory_msgs::msg::JointTrajectory>::SharedPtr trajectory_pub_;
     rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr velocity_pub_;
+    rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr pectoral_left_velocity_pub_;
+    rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr pectoral_right_velocity_pub_;
 
     // Model parameters
     double m_, rho_, g_, a_, b_, L_;
