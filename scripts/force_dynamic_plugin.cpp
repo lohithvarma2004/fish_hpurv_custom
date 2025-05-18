@@ -6,6 +6,7 @@
 #include <Eigen/Dense>
 #include <cmath>
 #include <chrono>
+#include <thread>
 
 using namespace std::chrono_literals;
 
@@ -32,8 +33,8 @@ public:
 
         // Fin positions (aligned with URDF)
         x1_ = -0.425323; y1_ = 0.0; z1_ = -0.06; // caudal_joint
-        x2_ = 0.05; y2_ = -0.18; z2_ = -0.035; // joint1
-        x3_ = 0.05; y3_ = 0.08; z3_ = -0.035; // joint2
+        x2_ = 0.05; y2_ = -0.18; z2_ = -0.035; // joint1 (pectoral left)
+        x3_ = 0.05; y3_ = 0.08; z3_ = -0.035; // joint2 (pectoral right)
 
         Cl_ = 0.92; Cd_ = 1.12;
         S1_ = 0.024; L_f1_ = 0.2;
@@ -78,6 +79,21 @@ public:
         RCLCPP_INFO(get_logger(), "Force Dynamic Node initialized");
     }
 
+    ~ForceDynamicNode()
+    {
+        // Publish zero velocities on shutdown
+        std_msgs::msg::Float64 zero_msg;
+        zero_msg.data = 0.0;
+        velocity_pub_->publish(zero_msg);
+        pectoral_left_velocity_pub_->publish(zero_msg);
+        pectoral_right_velocity_pub_->publish(zero_msg);
+
+        // Brief sleep to ensure messages are sent
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+        RCLCPP_INFO(get_logger(), "Force Dynamic Node shutting down, published zero velocities");
+    }
+
 private:
     void OnJointTrajectory(const trajectory_msgs::msg::JointTrajectory::SharedPtr msg)
     {
@@ -94,20 +110,45 @@ private:
     {
         // Use simulation time
         double t = get_clock()->now().nanoseconds() * 1e-9; // Convert to seconds
+        double cycle_time = fmod(t, 15.0); // Cycle every 15 seconds
 
-        // Sinusoidal flapping trajectory
-        double fi = 1.0; // 1 Hz for smooth motion
-        b1_ = 0.5 * sin(2 * M_PI * fi * t); // Caudal fin
-        b2_ = 0.5 * sin(2 * M_PI * fi * t + M_PI / 2); // Pectoral left
-        b3_ = 0.5 * sin(2 * M_PI * fi * t + M_PI / 2); // Pectoral right
+        // Initialize velocities
+        double v1 = 0.0, v2 = 0.0, v3 = 0.0;
+        double fi_caudal = 1.0; // Caudal fin frequency (Hz)
+        double fi_pect_left = 1.5; // Pectoral left frequency for yaw (Hz)
+        double fi_pect_right = 1.0; // Pectoral right frequency (Hz)
+        double amplitude = 0.5; // Consistent with original
+
+        // Timing sequence
+        if (cycle_time < 5.0)
+        {
+            // 0–5 seconds: Only caudal fin
+            v1 = amplitude * 2 * M_PI * fi_caudal * cos(2 * M_PI * fi_caudal * t);
+            v2 = 0.0;
+            v3 = 0.0;
+        }
+        else if (cycle_time < 10.0)
+        {
+            // 5–10 seconds: Only pectoral fins, differential frequencies for yaw
+            v1 = 0.0;
+            v2 = amplitude * 2 * M_PI * fi_pect_left * cos(2 * M_PI * fi_pect_left * t + M_PI / 2);
+            v3 = amplitude * 2 * M_PI * fi_pect_right * cos(2 * M_PI * fi_pect_right * t + M_PI / 2);
+        }
+        else
+        {
+            // 10–15 seconds (and beyond): Only caudal fin
+            v1 = amplitude * 2 * M_PI * fi_caudal * cos(2 * M_PI * fi_caudal * t);
+            v2 = 0.0;
+            v3 = 0.0;
+        }
+
+        // Sinusoidal flapping trajectory for visualization
+        b1_ = amplitude * sin(2 * M_PI * fi_caudal * t);
+        b2_ = amplitude * sin(2 * M_PI * fi_pect_left * t + M_PI / 2);
+        b3_ = amplitude * sin(2 * M_PI * fi_pect_right * t + M_PI / 2);
         b1_ = std::max(-0.523599, std::min(0.523599, b1_));
         b2_ = std::max(-0.785398, std::min(0.785398, b2_));
         b3_ = std::max(-0.785398, std::min(0.785398, b3_));
-
-        // Compute velocities
-        double v1 = 0.5 * 2 * M_PI * fi * cos(2 * M_PI * fi * t);
-        double v2 = 0.5 * 2 * M_PI * fi * cos(2 * M_PI * fi * t + M_PI / 2);
-        double v3 = 0.5 * 2 * M_PI * fi * cos(2 * M_PI * fi * t + M_PI / 2);
 
         // Publish velocities
         std_msgs::msg::Float64 velocity_msg;
