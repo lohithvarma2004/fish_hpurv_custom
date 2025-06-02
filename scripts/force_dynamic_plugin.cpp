@@ -1,252 +1,103 @@
 #include <rclcpp/rclcpp.hpp>
-#include <trajectory_msgs/msg/joint_trajectory.hpp>
-#include <sensor_msgs/msg/joint_state.hpp>
 #include <geometry_msgs/msg/pose.hpp>
+#include <geometry_msgs/msg/twist.hpp>
 #include <std_msgs/msg/float64.hpp>
-#include <Eigen/Dense>
-#include <cmath>
-#include <chrono>
-#include <thread>
 
-using namespace std::chrono_literals;
-
-class ForceDynamicNode : public rclcpp::Node
+class SimpleBuoyancyNode : public rclcpp::Node
 {
 public:
-    ForceDynamicNode() : Node("force_dynamic_node")
-    {
-        // Set use_sim_time
-        set_parameter(rclcpp::Parameter("use_sim_time", true));
+  SimpleBuoyancyNode() : Node("simple_buoyancy_node")
+  {
+    // Parameters (tune these!)
+    this->declare_parameter("water_density", 1025.0);       // kg/m^3
+    this->declare_parameter("gravity", 9.81);               // m/s^2
+    this->declare_parameter("vehicle_volume", 0.02);        // m^3 (displaced volume)
+    this->declare_parameter("vehicle_mass", 15.0);          // kg
+    this->declare_parameter("target_depth", -5.0);          // m (negative down)
+    this->declare_parameter("kp_depth", 10.0);              // proportional gain
+    this->declare_parameter("kd_depth", 5.0);               // derivative gain
 
-        // Initialize model parameters (aligned with URDF)
-        m_ = 12.6; // Total mass
-        rho_ = 1000.0; // Density of water
-        g_ = 9.81; // Gravity
-        a_ = 0.17; b_ = 0.24; L_ = 0.740; // Dimensions
-        xG_ = 0.0325815; yG_ = 0.0493006; zG_ = -0.0204279; // CoG
-        xB_ = 0.0325815; yB_ = 0.0493006; zB_ = 0.02; // CoB
-        IxG_ = 0.01; IyG_ = 0.01; IzG_ = 0.01; // MoI
-        Ixy_ = 0.0; Iyz_ = 0.0; Ixz_ = 0.0;
-        Ix_ = IxG_ + m_ * (yG_ * yG_ + zG_ * zG_);
-        Iy_ = IyG_ + m_ * (xG_ * xG_ + zG_ * zG_);
-        Iz_ = IzG_ + m_ * (xG_ * xG_ + yG_ * yG_);
+    this->get_parameter("water_density", water_density_);
+    this->get_parameter("gravity", gravity_);
+    this->get_parameter("vehicle_volume", volume_);
+    this->get_parameter("vehicle_mass", mass_);
+    this->get_parameter("target_depth", target_depth_);
+    this->get_parameter("kp_depth", kp_depth_);
+    this->get_parameter("kd_depth", kd_depth_);
 
-        // Fin positions (aligned with URDF)
-        x1_ = -0.425323; y1_ = 0.0; z1_ = -0.06; // caudal_joint
-        x2_ = 0.05; y2_ = -0.18; z2_ = -0.035; // joint1 (pectoral left)
-        x3_ = 0.05; y3_ = 0.08; z3_ = -0.035; // joint2 (pectoral right)
+    // Subscribers to vehicle pose and velocity to get depth and vertical velocity
+    pose_sub_ = this->create_subscription<geometry_msgs::msg::Pose>(
+      "vehicle/pose", 10, std::bind(&SimpleBuoyancyNode::poseCallback, this, std::placeholders::_1));
 
-        Cl_ = 0.92; Cd_ = 1.12;
-        S1_ = 0.024; L_f1_ = 0.2;
-        S2_ = 0.044; L_f2_ = 0.1;
-        S3_ = 0.044; L_f3_ = 0.1;
-        PF1max_ = 5.0;
-        freqmax_ = 2.0;
-        dt_ = 0.033; // Match controller update rate (30 Hz)
-        Ux_ = 0.4; Uy_ = 0.4; Uz_ = 0.0;
+    twist_sub_ = this->create_subscription<geometry_msgs::msg::Twist>(
+      "vehicle/twist", 10, std::bind(&SimpleBuoyancyNode::twistCallback, this, std::placeholders::_1));
 
-        // Initialize state vectors
-        nu_ = Eigen::VectorXd::Zero(6);
-        eta_ = Eigen::VectorXd::Zero(6);
-        eta_(0) = 0.0; eta_(1) = 0.0; eta_(2) = 0.0;
-        eta_(3) = 0.0; eta_(4) = 0.0; eta_(5) = 0.0;
+    buoyancy_pub_ = this->create_publisher<std_msgs::msg::Float64>("buoyancy_force_z", 10);
 
-        // Fin angles
-        b1_ = 0.0; b2_ = 0.0; b3_ = 0.0;
+    // Timer: publish buoyancy force at 100 Hz
+    timer_ = this->create_wall_timer(
+      std::chrono::milliseconds(10), std::bind(&SimpleBuoyancyNode::controlLoop, this));
 
-        // ROS 2 subscriptions and publications
-        sub_ = create_subscription<trajectory_msgs::msg::JointTrajectory>(
-            "/joint_trajectory_controller/joint_trajectory", 10,
-            std::bind(&ForceDynamicNode::OnJointTrajectory, this, std::placeholders::_1));
-
-        joint_state_pub_ = create_publisher<sensor_msgs::msg::JointState>(
-            "/joint_states", 10);
-        pose_pub_ = create_publisher<geometry_msgs::msg::Pose>(
-            "/hpurv/pose", 10);
-        trajectory_pub_ = create_publisher<trajectory_msgs::msg::JointTrajectory>(
-            "/joint_trajectory_controller/joint_trajectory", 10);
-        velocity_pub_ = create_publisher<std_msgs::msg::Float64>(
-            "/caudal_velocity", 10);
-        pectoral_left_velocity_pub_ = create_publisher<std_msgs::msg::Float64>(
-            "/pectoral_left_velocity", 10);
-        pectoral_right_velocity_pub_ = create_publisher<std_msgs::msg::Float64>(
-            "/pectoral_right_velocity", 10);
-
-        // Timer for dynamics update (30 Hz to match controller)
-        timer_ = create_wall_timer(
-            33ms, std::bind(&ForceDynamicNode::TimerCallback, this));
-
-        RCLCPP_INFO(get_logger(), "Force Dynamic Node initialized");
-    }
-
-    ~ForceDynamicNode()
-    {
-        // Publish zero velocities on shutdown
-        std_msgs::msg::Float64 zero_msg;
-        zero_msg.data = 0.0;
-        velocity_pub_->publish(zero_msg);
-        pectoral_left_velocity_pub_->publish(zero_msg);
-        pectoral_right_velocity_pub_->publish(zero_msg);
-
-        // Brief sleep to ensure messages are sent
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-
-        RCLCPP_INFO(get_logger(), "Force Dynamic Node shutting down, published zero velocities");
-    }
+    RCLCPP_INFO(this->get_logger(), "SimpleBuoyancyNode started");
+  }
 
 private:
-    void OnJointTrajectory(const trajectory_msgs::msg::JointTrajectory::SharedPtr msg)
-    {
-        if (!msg->points.empty() && msg->points[0].positions.size() == 3)
-        {
-            b1_ = std::max(-0.523599, std::min(0.523599, msg->points[0].positions[0]));
-            b2_ = std::max(-0.785398, std::min(0.785398, msg->points[0].positions[1]));
-            b3_ = std::max(-0.785398, std::min(0.785398, msg->points[0].positions[2]));
-            RCLCPP_INFO(get_logger(), "Received trajectory: b1=%f, b2=%f, b3=%f", b1_, b2_, b3_);
-        }
-    }
+  void poseCallback(const geometry_msgs::msg::Pose::SharedPtr msg)
+  {
+    current_depth_ = msg->position.z;  // z is vertical, down is negative
+  }
 
-    void TimerCallback()
-    {
-        // Use simulation time
-        double t = get_clock()->now().nanoseconds() * 1e-9; // Convert to seconds
-        double cycle_time = fmod(t, 15.0); // Cycle every 15 seconds
+  void twistCallback(const geometry_msgs::msg::Twist::SharedPtr msg)
+  {
+    vertical_velocity_ = msg->linear.z;
+  }
 
-        // Initialize velocities
-        double v1 = 0.0, v2 = 0.0, v3 = 0.0;
-        double fi_caudal = 1.0; // Caudal fin frequency (Hz)
-        double fi_pect_left = 1.5; // Pectoral left frequency for yaw (Hz)
-        double fi_pect_right = 1.0; // Pectoral right frequency (Hz)
-        double amplitude = 0.5; // Consistent with original
+  void controlLoop()
+  {
+    // Buoyancy force: F_b = rho * g * V
+    double buoyancy_force = water_density_ * gravity_ * volume_;
 
-        // Timing sequence
-        if (cycle_time < 5.0)
-        {
-            // 0–5 seconds: Only caudal fin
-            v1 = amplitude * 2 * M_PI * fi_caudal * cos(2 * M_PI * fi_caudal * t);
-            v2 = 0.0;
-            v3 = 0.0;
-        }
-        else if (cycle_time < 10.0)
-        {
-            // 5–10 seconds: Only pectoral fins, differential frequencies for yaw
-            v1 = 0.0;
-            v2 = amplitude * 2 * M_PI * fi_pect_left * cos(2 * M_PI * fi_pect_left * t + M_PI / 2);
-            v3 = amplitude * 2 * M_PI * fi_pect_right * cos(2 * M_PI * fi_pect_right * t + M_PI / 2);
-        }
-        else
-        {
-            // 10–15 seconds (and beyond): Only caudal fin
-            v1 = amplitude * 2 * M_PI * fi_caudal * cos(2 * M_PI * fi_caudal * t);
-            v2 = 0.0;
-            v3 = 0.0;
-        }
+    // Weight force: F_w = m * g
+    double weight_force = mass_ * gravity_;
 
-        // Sinusoidal flapping trajectory for visualization
-        b1_ = amplitude * sin(2 * M_PI * fi_caudal * t);
-        b2_ = amplitude * sin(2 * M_PI * fi_pect_left * t + M_PI / 2);
-        b3_ = amplitude * sin(2 * M_PI * fi_pect_right * t + M_PI / 2);
-        b1_ = std::max(-0.523599, std::min(0.523599, b1_));
-        b2_ = std::max(-0.785398, std::min(0.785398, b2_));
-        b3_ = std::max(-0.785398, std::min(0.785398, b3_));
+    // Net buoyancy force (positive upwards)
+    double net_buoyancy = buoyancy_force - weight_force;
 
-        // Publish velocities
-        std_msgs::msg::Float64 velocity_msg;
-        velocity_msg.data = v1;
-        velocity_pub_->publish(velocity_msg);
+    // Depth error control (simple PD controller)
+    double depth_error = target_depth_ - current_depth_;
+    double depth_correction = kp_depth_ * depth_error - kd_depth_ * vertical_velocity_;
 
-        std_msgs::msg::Float64 pectoral_left_velocity_msg;
-        pectoral_left_velocity_msg.data = v2;
-        pectoral_left_velocity_pub_->publish(pectoral_left_velocity_msg);
+    // Final vertical force = net buoyancy + depth correction
+    double total_buoyancy_force = net_buoyancy + depth_correction;
 
-        std_msgs::msg::Float64 pectoral_right_velocity_msg;
-        pectoral_right_velocity_msg.data = v3;
-        pectoral_right_velocity_pub_->publish(pectoral_right_velocity_msg);
+    std_msgs::msg::Float64 msg;
+    msg.data = total_buoyancy_force;
+    buoyancy_pub_->publish(msg);
 
-        // Approximate pose update (for logging, Gazebo handles actual physics)
-        double k = 5.0; // Thrust coefficient (N·s/rad²)
-        double force_x = k * std::abs(v1) * v1;
-        double acc_x = force_x / m_; // Acceleration (m/s²)
-        nu_(0) += acc_x * dt_; // Update velocity (m/s)
-        eta_(0) += nu_(0) * dt_; // Update position (m)
+    RCLCPP_DEBUG(this->get_logger(), "Depth=%.3f, Vel=%.3f, Buoyancy=%.3f",
+                 current_depth_, vertical_velocity_, total_buoyancy_force);
+  }
 
-        // Publish joint states
-        sensor_msgs::msg::JointState joint_state;
-        joint_state.header.stamp = this->now();
-        joint_state.name = {"caudal_joint", "joint1", "joint2"};
-        joint_state.position = {b1_, b2_, b3_};
-        joint_state.velocity = {v1, v2, v3};
-        joint_state_pub_->publish(joint_state);
+  // Parameters
+  double water_density_, gravity_, volume_, mass_, target_depth_;
+  double kp_depth_, kd_depth_;
 
-        // Publish joint trajectory commands
-        trajectory_msgs::msg::JointTrajectory trajectory_msg;
-        trajectory_msg.header.stamp = this->now();
-        trajectory_msg.joint_names = {"caudal_joint", "joint1", "joint2"};
-        trajectory_msgs::msg::JointTrajectoryPoint point;
-        point.positions = {b1_, b2_, b3_};
-        point.velocities = {v1, v2, v3};
-        point.time_from_start = rclcpp::Duration::from_seconds(0.1);
-        trajectory_msg.points.push_back(point);
-        trajectory_pub_->publish(trajectory_msg);
+  // State
+  double current_depth_ = 0.0;
+  double vertical_velocity_ = 0.0;
 
-        // Publish pose
-        geometry_msgs::msg::Pose pose_msg;
-        pose_msg.position.x = eta_(0);
-        pose_msg.position.y = eta_(1);
-        pose_msg.position.z = eta_(2);
-        double roll = eta_(3), pitch = eta_(4), yaw = eta_(5);
-        double cy = cos(yaw * 0.5);
-        double sy = sin(yaw * 0.5);
-        double cp = cos(pitch * 0.5);
-        double sp = sin(pitch * 0.5);
-        double cr = cos(roll * 0.5);
-        double sr = sin(roll * 0.5);
-        pose_msg.orientation.w = cr * cp * cy + sr * sp * sy;
-        pose_msg.orientation.x = sr * cp * cy - cr * sp * sy;
-        pose_msg.orientation.y = cr * sp * cy + sr * cp * sy;
-        pose_msg.orientation.z = cr * cp * sy - sr * sp * cy;
-        pose_pub_->publish(pose_msg);
-
-        // Log fin angles, velocities, force, and pose
-        RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000, "Simulation time: %f", t);
-        RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000, "Fin angles: b1=%f, b2=%f, b3=%f", b1_, b2_, b3_);
-        RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000, "Fin velocities: v1=%f, v2=%f, v3=%f", v1, v2, v3);
-        RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000, "Estimated force: %f N", force_x);
-        RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000, "Pose: x=%f, y=%f, z=%f", eta_(0), eta_(1), eta_(2));
-        RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000, "Published trajectory: b1=%f, b2=%f, b3=%f", b1_, b2_, b3_);
-        RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000, "Published caudal velocity: %f", v1);
-        RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000, "Published pectoral left velocity: %f", v2);
-        RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000, "Published pectoral right velocity: %f", v3);
-    }
-
-    // Member variables
-    rclcpp::TimerBase::SharedPtr timer_;
-    rclcpp::Subscription<trajectory_msgs::msg::JointTrajectory>::SharedPtr sub_;
-    rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr joint_state_pub_;
-    rclcpp::Publisher<geometry_msgs::msg::Pose>::SharedPtr pose_pub_;
-    rclcpp::Publisher<trajectory_msgs::msg::JointTrajectory>::SharedPtr trajectory_pub_;
-    rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr velocity_pub_;
-    rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr pectoral_left_velocity_pub_;
-    rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr pectoral_right_velocity_pub_;
-
-    // Model parameters
-    double m_, rho_, g_, a_, b_, L_;
-    double xG_, yG_, zG_, xB_, yB_, zB_;
-    double IxG_, IyG_, IzG_, Ixy_, Iyz_, Ixz_, Ix_, Iy_, Iz_;
-    double x1_, y1_, z1_, x2_, y2_, z2_, x3_, y3_, z3_;
-    double Cl_, Cd_, S1_, L_f1_, S2_, L_f2_, S3_, L_f3_;
-    double PF1max_, freqmax_, dt_;
-    double Ux_, Uy_, Uz_;
-    double b1_, b2_, b3_;
-
-    // Matrices and vectors
-    Eigen::MatrixXd nu_, eta_;
+  // ROS2 interfaces
+  rclcpp::Subscription<geometry_msgs::msg::Pose>::SharedPtr pose_sub_;
+  rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr twist_sub_;
+  rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr buoyancy_pub_;
+  rclcpp::TimerBase::SharedPtr timer_;
 };
 
-int main(int argc, char * argv[])
+int main(int argc, char **argv)
 {
-    rclcpp::init(argc, argv);
-    rclcpp::spin(std::make_shared<ForceDynamicNode>());
-    rclcpp::shutdown();
-    return 0;
+  rclcpp::init(argc, argv);
+  auto node = std::make_shared<SimpleBuoyancyNode>();
+  rclcpp::spin(node);
+  rclcpp::shutdown();
+  return 0;
 }

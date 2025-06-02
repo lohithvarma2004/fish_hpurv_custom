@@ -1,8 +1,9 @@
 import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription, SetEnvironmentVariable, TimerAction, ExecuteProcess
+from launch.actions import IncludeLaunchDescription, SetEnvironmentVariable, TimerAction, ExecuteProcess, DeclareLaunchArgument
 from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from launch_ros.descriptions import ParameterValue
 import xacro
@@ -53,11 +54,24 @@ def generate_launch_description():
         parameters=[{'robot_description': robot_description, 'use_sim_time': True}]
     )
 
-    # Spawn the robot in Gazebo (reads robot_description from parameter server)
+    # Declare depth as a configurable launch argument
+    declare_spawn_depth = DeclareLaunchArgument(
+        'spawn_depth',
+        default_value='-1.5',
+        description='Initial depth (z) to spawn the fish'
+    )
+
+    # Spawn the robot in Gazebo with configurable depth
     spawn_entity_node = Node(
         package='gazebo_ros',
         executable='spawn_entity.py',
-        arguments=['-entity', 'fish_hpurv', '-topic', 'robot_description'],
+        arguments=[
+            '-entity', 'fish_hpurv',
+            '-topic', 'robot_description',
+            '-x', '0',
+            '-y', '0',
+            '-z', LaunchConfiguration('spawn_depth')
+        ],
         output='screen'
     )
 
@@ -92,6 +106,7 @@ def generate_launch_description():
     ld.add_action(set_gazebo_plugin_path)
     ld.add_action(set_gazebo_model_path)
     ld.add_action(suppress_alsa_warnings)
+    ld.add_action(declare_spawn_depth)  # Added the depth argument declaration
     ld.add_action(gazebo_launch)
     ld.add_action(robot_state_publisher_node)
     ld.add_action(spawn_entity_node)
