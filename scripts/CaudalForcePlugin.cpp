@@ -6,7 +6,6 @@
 #include <ignition/math/Quaternion.hh>
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/string.hpp>
-#include <std_msgs/msg/float64.hpp>
 
 namespace gazebo
 {
@@ -33,32 +32,37 @@ public:
         "/glider_mode", 10,
         std::bind(&GliderPitchBuoyancyPlugin::OnModeMsg, this, std::placeholders::_1));
 
-    this->vertical_force_sub = ros_node->create_subscription<std_msgs::msg::Float64>(
-        "/buoyancy_force_z", 10,
-        std::bind(&GliderPitchBuoyancyPlugin::OnVerticalForceMsg, this, std::placeholders::_1));
-
     this->updateConnection = event::Events::ConnectWorldUpdateBegin(
         std::bind(&GliderPitchBuoyancyPlugin::OnUpdate, this));
 
-    gzmsg << "[INFO] GliderPitchBuoyancyPlugin loaded. Waiting for /glider_mode command.\n";
+    gzmsg << "[INFO] GliderPitchBuoyancyPlugin loaded. Waiting for /glider_mode 'start' command.\n";
   }
 
   void OnModeMsg(const std_msgs::msg::String::SharedPtr msg)
   {
     std::string mode = msg->data;
 
-    if (mode == "descent" || mode == "ascent")
+    if (mode == "start")
     {
-      glider_mode = mode;
-      pitching_started = false;
-      pitch_complete = false;
-      glide_started = false;
-      pitch_start_time = this->model->GetWorld()->SimTime().Double();
-      gzmsg << "[INFO] Mode change: " << mode << " at time: " << pitch_start_time << "\n";
+      if (glider_mode == "idle")
+      {
+        glider_mode = "descent";
+        cycle_active = true;
+        pitching_started = false;
+        pitch_complete = false;
+        glide_started = false;
+        pitch_start_time = this->model->GetWorld()->SimTime().Double();
+        gzmsg << "[INFO] Start command received. Beginning descent at time: " << pitch_start_time << "\n";
+      }
+      else
+      {
+        gzwarn << "[WARN] Start command ignored: Cycle already active.\n";
+      }
     }
     else if (mode == "idle")
     {
       glider_mode = "idle";
+      cycle_active = false;
       pitching_started = pitch_complete = glide_started = false;
       gzmsg << "[INFO] Mode set to IDLE.\n";
     }
@@ -66,11 +70,6 @@ public:
     {
       gzwarn << "[WARN] Unknown mode: " << mode << "\n";
     }
-  }
-
-  void OnVerticalForceMsg(const std_msgs::msg::Float64::SharedPtr msg)
-  {
-    this->vertical_force_z = msg->data;
   }
 
   void OnUpdate()
@@ -89,17 +88,50 @@ public:
     const double pitch_gain = 1.5;
     const double pitch_tolerance = 0.05;
     const double glide_delay = 15.0;
+    const double depth_tolerance = 0.5; // Tolerance for depth targets
 
     double target_pitch = 0.0;
 
+    // Depth-based mode switching
+    if (cycle_active)
+    {
+      if (glider_mode == "descent" && pos.Z() <= -70.0 + depth_tolerance)
+      {
+        glider_mode = "ascent";
+        pitching_started = false;
+        pitch_complete = false;
+        glide_started = false;
+        pitch_start_time = sim_time;
+        gzmsg << "[INFO] Reached depth -70m. Switching to ascent at time: " << sim_time << "\n";
+      }
+      else if (glider_mode == "ascent" && pos.Z() >= -0.5 - depth_tolerance)
+      {
+        glider_mode = "descent";
+        pitching_started = false;
+        pitch_complete = false;
+        glide_started = false;
+        pitch_start_time = sim_time;
+        gzmsg << "[INFO] Reached depth -0.5m. Switching to descent at time: " << sim_time << "\n";
+      }
+    }
+
+    // Set target pitch based on mode
     if (glider_mode == "descent")
       target_pitch = +0.5;
     else if (glider_mode == "ascent")
       target_pitch = -0.5;
 
-    // Apply buoyancy force from /buoyancy_force_z topic
-    ignition::math::Vector3d buoyancy_force(-vertical_force_z, 0, 0);
-    this->link->AddForce(buoyancy_force);
+    // Apply buoyancy force only in ascent phase
+    if (glider_mode == "ascent")
+    {
+      vertical_force_z = 13.0; // Fixed buoyancy force for ascent
+      ignition::math::Vector3d buoyancy_force(-vertical_force_z, 0, 0);
+      this->link->AddForce(buoyancy_force);
+    }
+    else
+    {
+      vertical_force_z = 0.0; // No buoyancy force in descent or idle
+    }
 
     // Pitch control
     if (!pitch_complete)
@@ -141,7 +173,8 @@ public:
       gzdbg << "[DEBUG] [" << glider_mode << "] Time: " << sim_time
             << " | pitch: " << pitch
             << " | vel: " << vel
-            << " | buoyancy_force_z: " << vertical_force_z << "\n";
+            << " | buoyancy_force_z: " << vertical_force_z
+            << " | depth: " << pos.Z() << "\n";
     }
 
     // Constrain lateral velocity
@@ -166,9 +199,9 @@ private:
 
   std::shared_ptr<rclcpp::Node> ros_node;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr mode_sub;
-  rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr vertical_force_sub;
 
   std::string glider_mode = "idle";
+  bool cycle_active = false;
   bool pitching_started = false;
   bool pitch_complete = false;
   bool glide_started = false;
